@@ -994,6 +994,7 @@ input[type=number]::-webkit-inner-spin-button{display:none;}
       <button onclick="openAdminPw()" style="background:none;border:none;color:var(--ink4);font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;text-decoration:underline;padding:4px 8px;">관리자 로그인</button>
     </div>
   </div>
+  <div style="position:fixed;bottom:6px;right:10px;font-size:10px;color:var(--ink4);font-family:'DM Mono',monospace;">build 2026-08-11-fbdebug</div>
 </div>
 
 <!-- ════ ADMIN PW OVERLAY ════ -->
@@ -1580,6 +1581,30 @@ let cvFilt='all',cvSrch='',cvPage=1;
 let cvEvId=null;
 const PPP=20;
 
+/* ══ FIREBASE 연결/에러 상태 배너 ══ */
+function _fbBanner(msg,color){
+  let b=document.getElementById('fb-status-banner');
+  if(!b){
+    b=document.createElement('div');
+    b.id='fb-status-banner';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:100000;padding:10px 16px;font-size:13px;font-family:\'Noto Sans KR\',sans-serif;text-align:center;font-weight:600;display:none;';
+    document.body.appendChild(b);
+  }
+  b.textContent=msg;
+  b.style.background=color;
+  b.style.color='#fff';
+  b.style.display='block';
+}
+function _fbBannerHide(){
+  const b=document.getElementById('fb-status-banner');
+  if(b) b.style.display='none';
+}
+function _fbErrText(e){
+  const code=(e&&(e.code||e.message))||String(e);
+  if(/permission/i.test(code)) return '⛔ Firebase 권한 오류(permission_denied): Realtime Database 규칙에서 read/write가 막혀 있습니다. Firebase 콘솔 > Realtime Database > 규칙을 확인해주세요.';
+  return '⚠️ Firebase 오류: '+code;
+}
+
 function save(){
   // Firebase에만 저장 (localStorage 제거)
   if(aId){
@@ -1587,7 +1612,9 @@ function save(){
     if(ev){
       const d=JSON.parse(JSON.stringify(ev));
       delete d._origXlsx;
-      window._db.ref('events/'+String(ev.id)).set(d).catch(function(e){console.warn('fbSave:',e);});
+      window._db.ref('events/'+String(ev.id)).set(d)
+        .then(function(){_fbBannerHide();})
+        .catch(function(e){console.warn('fbSave:',e);_fbBanner(_fbErrText(e),'#dc2626');});
     }
   }
 }
@@ -1605,6 +1632,11 @@ function _initFbListener(){
     if(cvEvId && getEv(cvEvId)) loadClientView(cvEvId);
     const btn=document.getElementById('btn-fb-sync');
     if(btn) btn.style.display='block';
+    _fbBannerHide();
+  }, function(err){
+    // 읽기 실패 — 예전 코드에는 이 콜백 자체가 없어서 조용히 실패했음
+    console.error('fbRead:',err);
+    _fbBanner(_fbErrText(err),'#dc2626');
   });
 }
 _initFbListener();
@@ -2895,7 +2927,7 @@ document.getElementById('btn-archive').onclick=()=>{
 document.getElementById('btn-delete').onclick=()=>{
   const ev=getEv(aId);if(!ev)return;
   if(!confirm(`"${ev.name}" 행사를 완전히 삭제하시겠습니까?`))return;
-  window._db.ref('events/'+String(aId)).remove().catch(function(e){console.warn(e);});events=events.filter(e=>e.id!==aId);aId=null;renderSb();renderHistSb();
+  window._db.ref('events/'+String(aId)).remove().catch(function(e){console.warn(e);_fbBanner(_fbErrText(e),'#dc2626');});events=events.filter(e=>e.id!==aId);aId=null;renderSb();renderHistSb();
   const rem=events.filter(e=>!e.archived);
   if(rem.length)loadDash(rem[rem.length-1].id);
   else{document.getElementById('dashboard').style.display='none';document.getElementById('empty-state').style.display='flex';}
@@ -2939,7 +2971,7 @@ document.getElementById('modal-ok').onclick=()=>{
   };
   events.push(ev);
   save();
-  const _d=JSON.parse(JSON.stringify(ev));delete _d._origXlsx;window._db.ref('events/'+String(ev.id)).set(_d).catch(function(e){console.warn(e);});
+  const _d=JSON.parse(JSON.stringify(ev));delete _d._origXlsx;window._db.ref('events/'+String(ev.id)).set(_d).catch(function(e){console.warn(e);_fbBanner(_fbErrText(e),'#dc2626');});
   closeModal();
   renderSb();
   loadDash(ev.id);
